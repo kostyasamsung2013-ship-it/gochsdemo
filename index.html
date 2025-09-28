@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Поиск документов</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #4361ee;
+      --primary-light: #4895ef;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --text: #212529;
+      --border: #e9ecef;
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+      --transition: all 0.2s ease;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+    }
+
+    /* === Глобальный поиск === */
+    .global-search {
+      padding: 16px 20px 12px;
+      background: var(--card-bg);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+
+    .global-search-title {
+      text-align: center;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #212529;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .global-search input {
+      width: 100%;
+      padding: 12px 120px 12px 16px; /* увеличен padding справа */
+      font-size: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    #clearGlobalSearch {
+      position: absolute;
+      right: 80px; /* слева от кнопки "Найти" */
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #6c757d;
+      display: none;
+      z-index: 10;
+    }
+
+    #globalSearchBtn {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 32px;
+      font-size: 13px;
+      padding: 0 10px;
+      z-index: 5;
+    }
+
+    .suggestions {
+      position: absolute;
+      background: white;
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 300;
+      width: 100%;
+      margin-top: 2px;
+    }
+
+    .suggestion-item {
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .suggestion-item:hover, .suggestion-item.selected {
+      background: #f1f3f5;
+    }
+
+    .container {
+      display: flex;
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 0 16px;
+      gap: 20px;
+    }
+
+    .header {
+      background: var(--card-bg);
+      padding: 12px 16px;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 72px;
+      z-index: 190;
+      margin-bottom: 16px;
+    }
+
+    .search-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+      justify-content: center;
+    }
+
+    .search-group {
+      display: flex;
+      flex-direction: column;
+      min-width: 130px;
+    }
+
+    .search-group label {
+      font-size: 12px;
+      margin-bottom: 3px;
+      color: #6c757d;
+      text-align: center;
+    }
+
+    .search-input, .search-select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+      min-height: 44px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 13px;
+      cursor: pointer;
+      transition: var(--transition);
+      min-height: 44px;
+    }
+
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-light); }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
+
+    .filters-panel {
+      width: 400px;
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 72px;
+      max-height: calc(100vh - 90px);
+      overflow-y: auto;
+      z-index: 170;
+    }
+
+    .mobile-filters-toggle {
+      display: none;
+      margin-bottom: 16px;
+      padding: 10px;
+      background: var(--card-bg);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .filter-section h3 {
+      font-size: 15px;
+      margin: 0 0 12px 0;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      background: var(--card-bg);
+      padding: 4px 0;
+      z-index: 10;
+    }
+
+    .catalog-item {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .catalog-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+
+    .catalog-header input {
+      accent-color: var(--primary);
+    }
+
+    .subsections-list {
+      margin-top: 8px;
+      padding-left: 24px;
+      display: none;
+    }
+
+    .subsections-list.active {
+      display: block;
+    }
+
+    .sub-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .sub-item input {
+      accent-color: var(--primary);
+    }
+
+    .main-content {
+      flex: 1;
+      padding-top: 20px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      background: #f8f9fa;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      min-height: 44px;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .pagination-container#pagination-top {
+      position: sticky;
+      top: 180px;
+      background: var(--bg);
+      padding: 12px 0;
+      z-index: 180;
+      margin: 0 0 16px 0;
+    }
+
+    .pagination-container#pagination-bottom {
+      position: static;
+      margin: 20px 0;
+    }
+
+    .pagination-container button {
+      min-height: 44px;
+    }
+
+    .results-info {
+      text-align: center;
+      margin: 12px 0;
+      font-size: 14px;
+      color: #495057;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(8px);
+      animation: fadeInUp 0.3s forwards;
+    }
+
+    @keyframes fadeInUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-title {
+      font-weight: 600;
+      font-size: 15px;
+      margin: 0 0 6px 0;
+      color: var(--primary);
+    }
+
+    .card-title a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .card-title a:hover {
+      text-decoration: underline;
+    }
+
+    .card-meta {
+      font-size: 12px;
+      color: #6c757d;
+      line-height: 1.4;
+    }
+
+    .card-meta a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .card-meta a:hover {
+      text-decoration: underline;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-left: 4px;
+    }
+    .badge-order { background: #e3f2fd; color: #1976d2; }
+    .badge-instruction { background: #e8f5e9; color: #2e7d32; }
+    .badge-method { background: #fff8e1; color: #f57f17; }
+    .badge-letter { background: #f3e5f5; color: #7b1fa2; }
+    .badge-default { background: #eeeeee; color: #616161; }
+
+    .card-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .card-actions a,
+    .card-actions button.bookmark-btn,
+    .card-actions button.export-btn {
+      font-size: 12px;
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      background: #f1f3f5;
+      color: #495057;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 44px;
+    }
+
+    .card-actions button.bookmark-btn {
+      background: #fff3cd;
+      color: #856404;
+      font-weight: 500;
+    }
+
+    .card-actions button.export-btn {
+      background: #d1ecf1;
+      color: #0c5460;
+      margin-top: 12px;
+      align-self: stretch;
+    }
+
+    .active-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      font-size: 13px;
+      margin: 12px 0;
+    }
+
+    .filter-chip {
+      background: #e7f1ff;
+      color: #4361ee;
+      padding: 4px 10px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .filter-chip .remove {
+      cursor: pointer;
+      font-weight: bold;
+      margin-left: 4px;
+    }
+
+    .filter-chip .remove:hover {
+      color: #d63939;
+    }
+
+    #results-anchor {
+      scroll-margin-top: 200px;
+      height: 1px;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6c757d;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+
+    #analytics-consent {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      z-index: 999;
+      max-width: 300px;
+    }
+    #analytics-consent button {
+      margin-left: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .container { flex-direction: column; padding-top: 20px; }
+      .filters-panel { 
+        position: static; 
+        width: 100%; 
+        max-height: none; 
+        display: none;
+      }
+      .filters-panel.active { display: block; }
+      .mobile-filters-toggle { display: block; }
+      .header { position: static; margin-top: 16px; }
+      .pagination-container#pagination-top { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="global-search">
+    <div class="global-search-title">
+      Нормативно-правовые акты и методические материалы по гражданской обороне и защите от чрезвычайных ситуаций
+    </div>
+    <div class="search-input-wrapper">
+      <input type="text" id="globalSearch" placeholder="Поиск: название, номер, дата (дд.мм.гггг)...">
+      <button id="clearGlobalSearch" onclick="clearGlobalSearch()">×</button>
+      <button id="globalSearchBtn" class="btn btn-primary">Найти</button>
+    </div>
+    <div class="suggestions" id="suggestions" style="display:none;"></div>
+  </div>
+
+  <div class="container">
+    <div class="mobile-filters-toggle" onclick="toggleMobileFilters()">Фильтры ▼</div>
+
+    <div class="filters-panel" id="filtersPanel">
+      <div class="filter-section">
+        <h3>Разделы</h3>
+        <div id="catalog-list"></div>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div id="results-anchor"></div>
+
+      <div class="header">
+        <div class="search-row">
+          <div class="search-group">
+            <label>Номер</label>
+            <input type="text" id="queryNumber" class="search-input" placeholder="...">
+          </div>
+          <div class="search-group">
+            <label>Вид</label>
+            <select id="typeSelect" class="search-select">
+              <option value="">Все</option>
+            </select>
+          </div>
+          <div class="search-group">
+            <label>Источник</label>
+            <select id="sourceSelect" class="search-select">
+              <option value="">Все</option>
+            </select>
+          </div>
+          <div class="search-group">
+            <label>Год</label>
+            <select id="yearSelect" class="search-select">
+              <option value="">Все</option>
+            </select>
+          </div>
+          <div class="search-group">
+            <label>Дата</label>
+            <input type="date" id="exactDate" class="search-input">
+          </div>
+          <div class="search-group">
+            <label>От</label>
+            <input type="date" id="dateFrom" class="search-input">
+          </div>
+          <div class="search-group">
+            <label>До</label>
+            <input type="date" id="dateTo" class="search-input">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="applyFilters()">Применить</button>
+          <button class="btn btn-secondary" onclick="clearFilters()">Сбросить</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-view="all">Все документы</button>
+        <button class="tab-btn" data-view="bookmarks">Закладки (<span id="bookmark-count">0</span>)</button>
+        <button class="tab-btn" data-view="recent">Недавние (<span id="recent-count">0</span>)</button>
+      </div>
+
+      <div id="exportBookmarks" style="display:none; margin:12px 0;">
+        <button class="btn btn-secondary export-btn" onclick="exportBookmarksToExcel()">Экспортировать закладки в Excel</button>
+      </div>
+
+      <div class="active-filters" id="activeFilters" style="display:none;"></div>
+
+      <div class="pagination-container" id="pagination-top"></div>
+      <div class="results-info" id="status"></div>
+      <div id="results"></div>
+      <div class="pagination-container" id="pagination-bottom"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="analytics-consent" style="display:none;">
+    Помогите улучшить поиск: разрешите анонимную отправку популярных запросов.
+    <button onclick="acceptAnalytics()">Разрешить</button>
+    <button onclick="document.getElementById('analytics-consent').style.display='none'">Нет</button>
+  </div>
+
+  <script>
+    const FUNCTION_URL = "https://us-central1-basegochs.cloudfunctions.net/getAllDocuments";
+    let allDocuments = [];
+    let sectionToSubsections = {};
+    let allYears = [];
+    let currentResults = [];
+    let currentPage = 1;
+    const itemsPerPage = 20;
+    let suggestionsTimeout = null;
+    let analyticsEnabled = localStorage.getItem('gochs_analytics') === 'true';
+
+    let bookmarks = JSON.parse(localStorage.getItem('gochs_bookmarks') || '[]');
+    let recentDocs = JSON.parse(localStorage.getItem('gochs_recent') || '[]');
+    let currentView = 'all';
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.opacity = "1";
+      setTimeout(() => { toast.style.opacity = "0"; }, 2000);
+    }
+
+    function safeLocalStorageSet(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        console.warn('localStorage error:', e);
+      }
+    }
+
+    // === Парсинг даты дд.мм.гггг ===
+    function parseDateInput(input) {
+      const dateRegex = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
+      const match = input.match(dateRegex);
+      if (match) {
+        const day = match[1].padStart(2, '0');
+        const month = match[2].padStart(2, '0');
+        const year = match[3];
+        return `${year}-${month}-${day}`;
+      }
+      return null;
+    }
+
+    // === Глобальный поиск: показ крестика ===
+    document.getElementById("globalSearch").addEventListener("input", function() {
+      const clearBtn = document.getElementById("clearGlobalSearch");
+      clearBtn.style.display = this.value ? "block" : "none";
+      
+      clearTimeout(suggestionsTimeout);
+      suggestionsTimeout = setTimeout(() => showSuggestions(this.value), 300);
+    });
+
+    function showSuggestions(query) {
+      const suggestionsDiv = document.getElementById("suggestions");
+      if (!query.trim() || query.length < 2) {
+        suggestionsDiv.style.display = "none";
+        return;
+      }
+
+      if (allDocuments.length === 0) {
+        suggestionsDiv.style.display = "none";
+        return;
+      }
+
+      const matches = allDocuments
+        .map(d => d.Название)
+        .filter(name => name && name.toLowerCase().includes(query.toLowerCase()))
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 8);
+
+      if (matches.length === 0) {
+        suggestionsDiv.style.display = "none";
+        return;
+      }
+
+      suggestionsDiv.innerHTML = matches.map(name => 
+        `<div class="suggestion-item" onclick="selectSuggestion('${escapeHtml(name)}')">${escapeHtml(name)}</div>`
+      ).join('');
+      suggestionsDiv.style.display = "block";
+    }
+
+    function selectSuggestion(name) {
+      document.getElementById("globalSearch").value = name;
+      document.getElementById("suggestions").style.display = "none";
+      applyFilters();
+    }
+
+    function clearGlobalSearch() {
+      document.getElementById("globalSearch").value = "";
+      document.getElementById("clearGlobalSearch").style.display = "none";
+      document.getElementById("suggestions").style.display = "none";
+      applyFilters();
+    }
+
+    document.addEventListener("click", function(e) {
+      if (!e.target.closest(".global-search")) {
+        document.getElementById("suggestions").style.display = "none";
+      }
+    });
+
+    // === Остальной функционал ===
+    function toggleMobileFilters() {
+      const panel = document.getElementById('filtersPanel');
+      panel.classList.toggle('active');
+    }
+
+    function sendAnalytics(query) {
+      if (!analyticsEnabled || !query.trim()) return;
+      fetch('https://us-central1-basegochs.cloudfunctions.net/logSearch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.toLowerCase() })
+      }).catch(() => {});
+    }
+
+    function acceptAnalytics() {
+      analyticsEnabled = true;
+      safeLocalStorageSet('gochs_analytics', true);
+      document.getElementById('analytics-consent').style.display = 'none';
+      showToast('Спасибо! Аналитика включена.');
+    }
+
+    function filterByField(fieldName, value) {
+      if (!value || value === "—") return;
+      document.querySelectorAll('.catalog-checkbox, .sub-checkbox').forEach(cb => cb.checked = false);
+      document.getElementById("exactDate").value = "";
+      document.getElementById("dateFrom").value = "";
+      document.getElementById("dateTo").value = "";
+      document.getElementById("yearSelect").value = "";
+
+      if (fieldName === "Источник") {
+        document.getElementById("sourceSelect").value = value;
+      } else if (fieldName === "Вид") {
+        document.getElementById("typeSelect").value = value;
+      }
+
+      applyFilters();
+    }
+
+    function filterByCatalog(catalog) {
+      if (!catalog || catalog === "—") return;
+
+      document.getElementById("queryNumber").value = "";
+      document.getElementById("typeSelect").value = "";
+      document.getElementById("sourceSelect").value = "";
+      document.getElementById("yearSelect").value = "";
+      document.getElementById("exactDate").value = "";
+      document.getElementById("dateFrom").value = "";
+      document.getElementById("dateTo").value = "";
+      document.querySelectorAll('.catalog-checkbox, .sub-checkbox').forEach(cb => cb.checked = false);
+
+      const catCheckbox = document.querySelector(`.catalog-checkbox[value="${CSS.escape(catalog)}"]`);
+      if (catCheckbox) catCheckbox.checked = true;
+
+      applyFilters();
+      scrollToResults();
+    }
+
+    function scrollToResults() {
+      const anchor = document.getElementById("results-anchor");
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function renderCatalogList() {
+      const container = document.getElementById("catalog-list");
+      container.innerHTML = "";
+
+      Object.keys(sectionToSubsections).sort().forEach(cat => {
+        const subs = sectionToSubsections[cat] || [];
+        const hasSubs = subs.length > 0;
+
+        const div = document.createElement("div");
+        div.className = "catalog-item";
+        div.innerHTML = `
+          <div class="catalog-header">
+            <input type="checkbox" class="catalog-checkbox" value="${escapeHtml(cat)}">
+            <span>${escapeHtml(cat)}</span>
+            ${hasSubs ? '<span style="color:#6c757d; font-size:14px;">▼</span>' : ''}
+          </div>
+          ${hasSubs ? `
+            <div class="subsections-list">
+              ${subs.map(sub => `
+                <div class="sub-item">
+                  <input type="checkbox" class="sub-checkbox" data-catalog="${escapeHtml(cat)}" value="${escapeHtml(sub)}">
+                  <span>${escapeHtml(sub)}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        `;
+        container.appendChild(div);
+
+        if (hasSubs) {
+          const header = div.querySelector('.catalog-header');
+          const sublist = div.querySelector('.subsections-list');
+          header.addEventListener('click', (e) => {
+            if (!e.target.matches('input')) {
+              sublist.classList.toggle('active');
+            }
+          });
+        }
+      });
+
+      document.querySelectorAll('.catalog-checkbox, .sub-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+          applyFilters();
+        });
+      });
+    }
+
+    function updateTabCounts() {
+      document.getElementById('bookmark-count').textContent = bookmarks.length;
+      document.getElementById('recent-count').textContent = recentDocs.length;
+      document.getElementById('exportBookmarks').style.display = bookmarks.length > 0 ? 'block' : 'none';
+    }
+
+    function toggleBookmark(docId) {
+      const index = bookmarks.indexOf(docId);
+      if (index === -1) {
+        bookmarks.push(docId);
+        showToast('Добавлено в избранное');
+      } else {
+        bookmarks.splice(index, 1);
+        showToast('Удалено из избранного');
+      }
+      safeLocalStorageSet('gochs_bookmarks', bookmarks);
+      updateTabCounts();
+      renderResults();
+    }
+
+    function addRecentDoc(doc) {
+      recentDocs = recentDocs.filter(d => d.id !== doc.id);
+      recentDocs.unshift(doc);
+      if (recentDocs.length > 10) recentDocs.pop();
+      safeLocalStorageSet('gochs_recent', recentDocs);
+      updateTabCounts();
+    }
+
+    function exportBookmarksToExcel() {
+      if (bookmarks.length === 0) {
+        showToast('Нет закладок для экспорта');
+        return;
+      }
+
+      const bookmarkedDocs = allDocuments.filter(doc => bookmarks.includes(doc.id));
+      
+      const wsData = bookmarkedDocs.map(doc => ({
+        'Название': doc.Название || '',
+        'Номер': doc.Номер || '',
+        'Вид': doc.Вид || '',
+        'Дата': doc.Дата || '',
+        'Раздел 1': doc["Раздел 1"] || '',
+        'Раздел 2': doc["Раздел 2"] || '',
+        'Источник': doc.Источник || '',
+        'Ссылка': doc.ссылка || '',
+        'Скачать': doc["Ссылка для открытия"] || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(wsData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Закладки");
+      XLSX.writeFile(wb, "Закладки_ГОЧС.xlsx");
+      showToast('Закладки экспортированы в Excel!');
+    }
+
+    function getActiveFilters() {
+      const filters = [];
+
+      const globalQuery = document.getElementById("globalSearch").value.trim();
+      if (globalQuery) {
+        filters.push({ type: 'global', label: `Поиск: "${globalQuery}"`, value: globalQuery });
+      }
+
+      const queryNumber = document.getElementById("queryNumber").value.trim();
+      if (queryNumber) {
+        filters.push({ type: 'number', label: `Номер: ${queryNumber}`, value: queryNumber });
+      }
+
+      const type = document.getElementById("typeSelect").value;
+      if (type) {
+        filters.push({ type: 'type', label: `Вид: ${type}`, value: type });
+      }
+
+      const source = document.getElementById("sourceSelect").value;
+      if (source) {
+        filters.push({ type: 'source', label: `Источник: ${source}`, value: source });
+      }
+
+      const year = document.getElementById("yearSelect").value;
+      if (year) {
+        filters.push({ type: 'year', label: `Год: ${year}`, value: year });
+      }
+
+      const exactDate = document.getElementById("exactDate").value;
+      if (exactDate) {
+        const formatted = new Date(exactDate).toLocaleDateString('ru-RU');
+        filters.push({ type: 'exactDate', label: `Дата: ${formatted}`, value: exactDate });
+      }
+
+      const dateFrom = document.getElementById("dateFrom").value;
+      if (dateFrom) {
+        const formatted = new Date(dateFrom).toLocaleDateString('ru-RU');
+        filters.push({ type: 'dateFrom', label: `От: ${formatted}`, value: dateFrom });
+      }
+
+      const dateTo = document.getElementById("dateTo").value;
+      if (dateTo) {
+        const formatted = new Date(dateTo).toLocaleDateString('ru-RU');
+        filters.push({ type: 'dateTo', label: `До: ${formatted}`, value: dateTo });
+      }
+
+      const selectedCatalogs = Array.from(document.querySelectorAll('.catalog-checkbox:checked')).map(cb => cb.value);
+      selectedCatalogs.forEach(cat => {
+        filters.push({ type: 'catalog', label: `Раздел: ${cat}`, value: cat });
+      });
+
+      const selectedSubcatalogs = Array.from(document.querySelectorAll('.sub-checkbox:checked')).map(cb => cb.value);
+      selectedSubcatalogs.forEach(sub => {
+        filters.push({ type: 'subcatalog', label: `Подраздел: ${sub}`, value: sub });
+      });
+
+      return filters;
+    }
+
+    function renderActiveFilters() {
+      const filters = getActiveFilters();
+      const container = document.getElementById("activeFilters");
+
+      if (filters.length === 0) {
+        container.style.display = "none";
+        container.innerHTML = "";
+        return;
+      }
+
+      container.style.display = "flex";
+      container.innerHTML = `
+        ${filters.map(f => `
+          <div class="filter-chip">
+            ${escapeHtml(f.label)}
+            <span class="remove" data-type="${f.type}" data-value="${escapeHtml(f.value)}">×</span>
+          </div>
+        `).join('')}
+        <button class="btn btn-secondary" style="height:24px; font-size:12px; padding:0 8px;" onclick="clearFilters()">Сбросить всё</button>
+      `;
+
+      container.querySelectorAll(".remove").forEach(el => {
+        el.addEventListener("click", function() {
+          const type = this.getAttribute("data-type");
+          const value = this.getAttribute("data-value");
+
+          switch (type) {
+            case 'global':
+              document.getElementById("globalSearch").value = "";
+              break;
+            case 'number':
+              document.getElementById("queryNumber").value = "";
+              break;
+            case 'type':
+              document.getElementById("typeSelect").value = "";
+              break;
+            case 'source':
+              document.getElementById("sourceSelect").value = "";
+              break;
+            case 'year':
+              document.getElementById("yearSelect").value = "";
+              break;
+            case 'exactDate':
+              document.getElementById("exactDate").value = "";
+              break;
+            case 'dateFrom':
+              document.getElementById("dateFrom").value = "";
+              break;
+            case 'dateTo':
+              document.getElementById("dateTo").value = "";
+              break;
+            case 'catalog':
+              const catCheckbox = document.querySelector(`.catalog-checkbox[value="${CSS.escape(value)}"]`);
+              if (catCheckbox) catCheckbox.checked = false;
+              break;
+            case 'subcatalog':
+              const subCheckbox = document.querySelector(`.sub-checkbox[value="${CSS.escape(value)}"]`);
+              if (subCheckbox) subCheckbox.checked = false;
+              break;
+          }
+
+          applyFilters();
+        });
+      });
+    }
+
+    function applyFilters() {
+      currentPage = 1;
+      let globalQuery = document.getElementById("globalSearch").value.trim();
+      const queryNumber = document.getElementById("queryNumber").value.trim().toLowerCase();
+      const type = document.getElementById("typeSelect").value;
+      const source = document.getElementById("sourceSelect").value;
+      const year = document.getElementById("yearSelect").value;
+      const exactDate = document.getElementById("exactDate").value;
+      const dateFrom = document.getElementById("dateFrom").value;
+      const dateTo = document.getElementById("dateTo").value;
+
+      if (globalQuery) {
+        sendAnalytics(globalQuery);
+      }
+
+      const parsedDate = parseDateInput(globalQuery);
+      if (parsedDate) {
+        globalQuery = '';
+        const selectedCatalogs = Array.from(document.querySelectorAll('.catalog-checkbox:checked')).map(cb => cb.value);
+        const selectedSubcatalogs = Array.from(document.querySelectorAll('.sub-checkbox:checked')).map(cb => cb.value);
+
+        currentResults = allDocuments.filter(doc => {
+          const matchesDate = doc.Дата === parsedDate;
+          const matchesCatalog = selectedCatalogs.length === 0 || selectedCatalogs.includes(doc["Раздел 1"]);
+          const matchesSubcatalog = selectedSubcatalogs.length === 0 || 
+            (doc["Раздел 2"] && selectedSubcatalogs.includes(doc["Раздел 2"])) ||
+            (!doc["Раздел 2"] && selectedSubcatalogs.length === 0);
+          return matchesDate && matchesCatalog && matchesSubcatalog;
+        });
+
+        currentResults.sort((a, b) => (b.Дата || "").localeCompare(a.Дата || ""));
+        renderResults();
+        renderActiveFilters();
+        scrollToResults();
+        return;
+      }
+
+      const selectedCatalogs = Array.from(document.querySelectorAll('.catalog-checkbox:checked')).map(cb => cb.value);
+      const selectedSubcatalogs = Array.from(document.querySelectorAll('.sub-checkbox:checked')).map(cb => cb.value);
+
+      const filteredDocs = allDocuments.filter(doc => {
+        let matchesGlobal = true;
+        if (globalQuery) {
+          const searchableFields = [
+            doc.Название,
+            doc.Номер,
+            doc.Вид,
+            doc.Источник,
+            doc["Раздел 1"],
+            doc["Раздел 2"]
+          ].filter(Boolean).join(' ').toLowerCase();
+          matchesGlobal = searchableFields.includes(globalQuery.toLowerCase());
+        }
+
+        const matchesNumber = !queryNumber || doc.Номер.toLowerCase().includes(queryNumber);
+        const matchesType = !type || doc.Вид === type;
+        const matchesSource = !source || doc.Источник === source;
+        const matchesYear = !year || (doc.Дата && doc.Дата.startsWith(year));
+
+        const matchesCatalog = selectedCatalogs.length === 0 || selectedCatalogs.includes(doc["Раздел 1"]);
+        const matchesSubcatalog = selectedSubcatalogs.length === 0 || 
+          (doc["Раздел 2"] && selectedSubcatalogs.includes(doc["Раздел 2"])) ||
+          (!doc["Раздел 2"] && selectedSubcatalogs.length === 0);
+
+        let matchesDate = true;
+        if (exactDate) {
+          matchesDate = doc.Дата === exactDate;
+        } else if (dateFrom || dateTo) {
+          const d = doc.Дата;
+          if (!d) return false;
+          if (dateFrom && d < dateFrom) return false;
+          if (dateTo && d > dateTo) return false;
+        }
+
+        return matchesGlobal && matchesNumber && matchesType && matchesSource && 
+               matchesYear && matchesCatalog && matchesSubcatalog && matchesDate;
+      });
+
+      if (currentView === 'bookmarks') {
+        currentResults = filteredDocs.filter(doc => bookmarks.includes(doc.id));
+      } else if (currentView === 'recent') {
+        currentResults = recentDocs;
+      } else {
+        currentResults = filteredDocs;
+      }
+
+      if (currentView !== 'recent') {
+        currentResults.sort((a, b) => (b.Дата || "").localeCompare(a.Дата || ""));
+      }
+
+      renderResults();
+      renderActiveFilters();
+      scrollToResults();
+    }
+
+    function renderResults() {
+      const start = (currentPage - 1) * itemsPerPage;
+      const end = start + itemsPerPage;
+      const pageResults = currentResults.slice(start, end);
+
+      const statusDiv = document.getElementById("status");
+      if (currentView === 'recent') {
+        statusDiv.innerHTML = `Последние просмотренные (${recentDocs.length})`;
+      } else {
+        statusDiv.innerHTML = `Показано ${start + 1}–${Math.min(end, currentResults.length)} из ${currentResults.length} документов`;
+      }
+
+      const resultsDiv = document.getElementById("results");
+      if (pageResults.length === 0) {
+        let icon = '📄';
+        let message = 'Ничего не найдено';
+        let advice = 'Попробуйте изменить фильтры или расширить поиск.';
+
+        if (currentView === 'bookmarks') {
+          icon = '⭐';
+          message = 'Нет документов в закладках';
+          advice = 'Добавьте документы в избранное, чтобы видеть их здесь.';
+        } else if (currentView === 'recent') {
+          icon = '🕒';
+          message = 'Нет недавно просмотренных документов';
+          advice = 'Откройте документ, чтобы он появился в этом списке.';
+        }
+
+        resultsDiv.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">${icon}</div>
+            <div style="font-size:18px; margin-bottom:8px;">${message}</div>
+            <div>${advice}</div>
+          </div>
+        `;
+      } else {
+        resultsDiv.innerHTML = "";
+        const grid = document.createElement("div");
+        grid.className = "results-grid";
+        pageResults.forEach((doc, idx) => {
+          setTimeout(() => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.setAttribute('data-doc', JSON.stringify(doc));
+
+            let badgeClass = 'badge badge-default';
+            if (doc.Вид) {
+              if (/приказ/i.test(doc.Вид)) badgeClass = 'badge badge-order';
+              else if (/инструкц/i.test(doc.Вид)) badgeClass = 'badge badge-instruction';
+              else if (/метод/i.test(doc.Вид)) badgeClass = 'badge badge-method';
+              else if (/письм/i.test(doc.Вид)) badgeClass = 'badge badge-letter';
+            }
+
+            card.innerHTML = `
+              <div class="card-title">
+                ${doc.ссылка 
+                  ? `<a href="${escapeHtml(doc.ссылка)}" target="_blank" class="doc-link">${escapeHtml(doc.Название || "Без названия")}</a>` 
+                  : escapeHtml(doc.Название || "Без названия")}
+              </div>
+              <div class="card-meta">
+                Номер: ${escapeHtml(doc.Номер || "—")}<br>
+                Раздел: <a href="#" onclick="filterByCatalog('${escapeHtml(doc["Раздел 1"])}'); return false;">${escapeHtml(doc["Раздел 1"] || "—")}</a><br>
+                Подраздел: ${escapeHtml(doc["Раздел 2"] || "—")}<br>
+                Вид: <a href="#" onclick="filterByField('Вид', '${escapeHtml(doc.Вид)}'); return false;">${escapeHtml(doc.Вид || "—")} ${doc.Вид ? `<span class="${badgeClass}">${escapeHtml(doc.Вид)}</span>` : ''}</a><br>
+                Дата: ${escapeHtml(doc.Дата || "—")}<br>
+                Источник: <a href="#" onclick="filterByField('Источник', '${escapeHtml(doc.Источник)}'); return false;">${escapeHtml(doc.Источник || "—")}</a>
+              </div>
+              <div class="card-actions">
+                ${doc.ссылка 
+                  ? `<a href="${escapeHtml(doc.ссылка)}" target="_blank" class="doc-link">📄 Открыть</a>` 
+                  : ""}
+                ${doc["Ссылка для открытия"] 
+                  ? `<a href="${escapeHtml(doc["Ссылка для открытия"])}" target="_blank" class="doc-link">⬇️ Скачать</a>` 
+                  : ""}
+                <button class="bookmark-btn" onclick="toggleBookmark('${doc.id}')">
+                  ${bookmarks.includes(doc.id) ? '⭐ В избранном' : '☆ В избранное'}
+                </button>
+              </div>
+            `;
+            grid.appendChild(card);
+
+            card.querySelectorAll('.doc-link').forEach(link => {
+              link.addEventListener('click', function(e) {
+                const docJson = card.getAttribute('data-doc');
+                if (docJson) {
+                  const docObj = JSON.parse(docJson);
+                  addRecentDoc(docObj);
+                }
+              });
+            });
+
+          }, idx * 15);
+        });
+        resultsDiv.appendChild(grid);
+      }
+
+      renderPagination();
+    }
+
+    function renderPagination() {
+      if (currentView === 'recent') {
+        document.getElementById("pagination-top").innerHTML = "";
+        document.getElementById("pagination-bottom").innerHTML = "";
+        return;
+      }
+
+      const totalPages = Math.ceil(currentResults.length / itemsPerPage);
+      const top = document.getElementById("pagination-top");
+      const bottom = document.getElementById("pagination-bottom");
+      
+      if (totalPages <= 1) {
+        top.innerHTML = "";
+        bottom.innerHTML = "";
+        return;
+      }
+
+      let html = '';
+      const maxVisible = 7;
+      let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+      if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+      }
+
+      if (currentPage > 1) {
+        html += `<button onclick="goToPage(${currentPage - 1})">← Назад</button>`;
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        if (i === currentPage) {
+          html += `<button class="current">${i}</button>`;
+        } else {
+          html += `<button onclick="goToPage(${i})">${i}</button>`;
+        }
+      }
+
+      if (currentPage < totalPages) {
+        html += `<button onclick="goToPage(${currentPage + 1})">Вперёд →</button>`;
+      }
+
+      top.innerHTML = html;
+      bottom.innerHTML = html;
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      renderResults();
+      renderActiveFilters();
+      scrollToResults();
+    }
+
+    function clearFilters() {
+      document.getElementById("globalSearch").value = "";
+      document.getElementById("clearGlobalSearch").style.display = "none";
+      document.getElementById("queryNumber").value = "";
+      document.getElementById("typeSelect").value = "";
+      document.getElementById("sourceSelect").value = "";
+      document.getElementById("yearSelect").value = "";
+      document.getElementById("exactDate").value = "";
+      document.getElementById("dateFrom").value = "";
+      document.getElementById("dateTo").value = "";
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+      applyFilters();
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById("globalSearch").focus();
+
+      if (localStorage.getItem('gochs_analytics') === null) {
+        document.getElementById('analytics-consent').style.display = 'block';
+      }
+
+      const cached = localStorage.getItem('gochs_data_cache');
+      if (cached) {
+        const cache = JSON.parse(cached);
+        if (Date.now() - cache.timestamp < 24 * 60 * 60 * 1000) {
+          allDocuments = cache.data;
+          initAfterLoad();
+          return;
+        }
+      }
+
+      document.getElementById("status").innerHTML = '<div style="text-align:center; padding:20px; color:#6c757d;">Загрузка...</div>';
+      
+      try {
+        const response = await fetch(FUNCTION_URL);
+        const data = await response.json();
+        allDocuments = data.map(doc => ({
+          id: doc.id,
+          Название: doc.Название || "",
+          Номер: doc.Номер || "",
+          Вид: doc.Вид || "",
+          Дата: doc.Дата || "",
+          "Раздел 1": doc["Раздел 1"] || "",
+          "Раздел 2": doc["Раздел 2"] || "",
+          Источник: doc.Источник || "",
+          "Ссылка для открытия": doc["Ссылка для открытия"] || "",
+          ссылка: doc.ссылка || ""
+        }));
+
+        safeLocalStorageSet('gochs_data_cache', {
+           allDocuments,
+          timestamp: Date.now()
+        });
+
+        initAfterLoad();
+
+      } catch (e) {
+        document.getElementById("status").innerHTML = `<div style="color:red; text-align:center;">Ошибка: ${e.message}</div>`;
+      }
+    });
+
+    function initAfterLoad() {
+      allYears = [...new Set(
+        allDocuments
+          .map(d => d.Дата ? d.Дата.split('-')[0] : null)
+          .filter(Boolean)
+      )].sort().reverse();
+
+      sectionToSubsections = {};
+      allDocuments.forEach(doc => {
+        const sec1 = doc["Раздел 1"];
+        const sec2 = doc["Раздел 2"];
+        if (!sec1) return;
+        if (!sectionToSubsections[sec1]) sectionToSubsections[sec1] = new Set();
+        if (sec2) sectionToSubsections[sec1].add(sec2);
+      });
+      for (const sec in sectionToSubsections) {
+        sectionToSubsections[sec] = Array.from(sectionToSubsections[sec]).sort();
+      }
+
+      renderCatalogList();
+
+      const types = [...new Set(allDocuments.map(d => d.Вид).filter(Boolean))].sort();
+      const sources = [...new Set(allDocuments.map(d => d.Источник).filter(Boolean))].sort();
+
+      const typeSelect = document.getElementById("typeSelect");
+      types.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        typeSelect.appendChild(opt);
+      });
+
+      const sourceSelect = document.getElementById("sourceSelect");
+      sources.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        sourceSelect.appendChild(opt);
+      });
+
+      const yearSelect = document.getElementById("yearSelect");
+      allYears.forEach(y => {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = y;
+        yearSelect.appendChild(opt);
+      });
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentView = btn.dataset.view;
+          applyFilters();
+        });
+      });
+
+      document.getElementById("globalSearchBtn").addEventListener("click", applyFilters);
+
+      updateTabCounts();
+      applyFilters();
+    }
+  </script>
+</body>
+</html>
